@@ -8,12 +8,26 @@ const Product = require('./models/Product');
 
 const app = express();
 
-// connect to db then auto-seed if empty
+// connect to db then auto-seed if empty or data is stale
 connectDB().then(async () => {
   try {
     const count = await Product.countDocuments();
-    if (count === 0) {
-      console.log('No products found — running auto-seed...');
+    let needsSeed = count === 0;
+
+    // also reseed if all data is older than 90 days (stale dates)
+    if (!needsSeed) {
+      const Order = require('./models/Order');
+      const recent = await Order.findOne({
+        createdAt: { $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) }
+      });
+      if (!recent) {
+        console.log('Data is stale (no recent orders) — re-seeding...');
+        needsSeed = true;
+      }
+    }
+
+    if (needsSeed) {
+      console.log('Running auto-seed...');
       const seed = require('./seeds/seed');
       await seed(true);
       console.log('Auto-seed complete!');

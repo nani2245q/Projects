@@ -50,6 +50,11 @@ async function seed(alreadyConnected = false) {
     ]);
     console.log('Cleared existing data');
 
+    // use relative dates so analytics dashboard always has recent data
+    const now = new Date();
+    const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000;
+    const sixMonthsAgo = new Date(now.getTime() - SIX_MONTHS_MS);
+
     // admin account
     const admin = await User.create({
       email: 'admin@ecommerce.com',
@@ -57,16 +62,16 @@ async function seed(alreadyConnected = false) {
       name: 'Admin User',
       role: 'admin',
       acquisitionChannel: 'direct',
-      firstSeenAt: new Date('2024-01-01')
+      firstSeenAt: sixMonthsAgo
     });
     console.log('Admin created: admin@ecommerce.com / admin123');
 
     // make a bunch of fake customers
     const customerData = [];
     for (let i = 1; i <= 50; i++) {
-      const monthOffset = Math.floor(Math.random() * 6);
-      const dayOffset = Math.floor(Math.random() * 28);
-      const firstSeen = new Date(2024, monthOffset, dayOffset + 1);
+      // spread customers across the last 6 months
+      const daysAgo = Math.floor(Math.random() * 180);
+      const firstSeen = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
 
       customerData.push({
         email: `customer${i}@test.com`,
@@ -75,7 +80,7 @@ async function seed(alreadyConnected = false) {
         role: 'customer',
         acquisitionChannel: CHANNELS[Math.floor(Math.random() * CHANNELS.length)],
         firstSeenAt: firstSeen,
-        lastActiveAt: new Date(firstSeen.getTime() + Math.random() * 180 * 24 * 60 * 60 * 1000)
+        lastActiveAt: new Date(firstSeen.getTime() + Math.random() * (now.getTime() - firstSeen.getTime()))
       });
     }
     const customers = await User.create(customerData);
@@ -87,7 +92,6 @@ async function seed(alreadyConnected = false) {
     // generate fake behavior events + orders
     const events = [];
     const orders = [];
-    const now = new Date();
 
     for (const customer of customers) {
       const sessionCount = 2 + Math.floor(Math.random() * 8);
