@@ -1,8 +1,6 @@
 """
-E-Commerce Analytics Dashboard — Streamlit App
-Interactive dashboard that runs SQL queries against the warehouse
-and visualizes marketing attribution, conversion funnels, cohort retention,
-RFM segmentation, and customer LTV.
+dashboard for the ecommerce analytics pipeline.
+reads from the sqlite warehouse and shows the main analyses.
 """
 
 import streamlit as st
@@ -13,9 +11,9 @@ import sqlite3
 import os
 import sys
 
-# run the pipeline on first load (generates the SQLite DB if missing)
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'warehouse.db')
 
+# generate warehouse if it doesn't exist yet
 if not os.path.exists(DB_PATH):
     sys.path.insert(0, os.path.dirname(__file__))
     from etl.extract_load import main as run_etl
@@ -23,7 +21,11 @@ if not os.path.exists(DB_PATH):
     run_etl()
     run_models()
 
+# muted color palette — not the default rainbow
+COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948']
 
+
+@st.cache_data(ttl=600)
 def query(sql):
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query(sql, conn)
@@ -31,262 +33,324 @@ def query(sql):
     return df
 
 
-# ─── Page Config ────────────────────────────────────────────
-st.set_page_config(
-    page_title="E-Commerce Analytics",
-    page_icon="📊",
-    layout="wide"
+def clean_chart(fig, height=360):
+    """strip down plotly chrome so charts look less default"""
+    fig.update_layout(
+        height=height,
+        margin=dict(l=0, r=10, t=35, b=0),
+        title_font_size=14,
+        font_size=12,
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        showlegend=False,
+        coloraxis_showscale=False
+    )
+    fig.update_xaxes(showgrid=True, gridcolor='#f0f0f0')
+    fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0')
+    return fig
+
+
+# ─── page setup ────────────────────────────────────────────
+st.set_page_config(page_title="Commerce Analytics", layout="wide")
+
+# custom css to tone down the streamlit defaults
+st.markdown("""
+<style>
+    [data-testid="stMetric"] {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        padding: 12px 16px;
+    }
+    [data-testid="stMetricLabel"] { font-size: 0.75rem; }
+    [data-testid="stMetricValue"] { font-size: 1.4rem; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 16px;
+        font-size: 0.85rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("### Commerce Analytics")
+st.markdown(
+    "<span style='color:#888; font-size:0.85rem;'>"
+    "marketing attribution / conversion analysis / customer segmentation / lifetime value"
+    "</span>",
+    unsafe_allow_html=True
 )
 
-st.title("📊 E-Commerce Analytics Dashboard")
-st.caption("SQL-powered analytics pipeline · Marketing Attribution · Cohort Retention · RFM Segmentation")
-
-# ─── KPIs ───────────────────────────────────────────────────
+# ─── KPIs ──────────────────────────────────────────────────
 kpis = query("""
     SELECT
-        (SELECT COUNT(*) FROM dim_customers) AS total_customers,
-        (SELECT COUNT(*) FROM fact_orders) AS total_orders,
-        (SELECT ROUND(SUM(total), 2) FROM fact_orders) AS total_revenue,
-        (SELECT ROUND(AVG(total), 2) FROM fact_orders) AS avg_order_value,
-        (SELECT COUNT(DISTINCT session_id) FROM fact_sessions) AS total_sessions,
-        (SELECT COUNT(*) FROM dim_products) AS total_products
+        (SELECT COUNT(*) FROM dim_customers) AS customers,
+        (SELECT COUNT(*) FROM fact_orders) AS orders,
+        (SELECT ROUND(SUM(total), 2) FROM fact_orders) AS revenue,
+        (SELECT ROUND(AVG(total), 2) FROM fact_orders) AS aov,
+        (SELECT COUNT(DISTINCT session_id) FROM fact_sessions) AS sessions
 """).iloc[0]
 
-col1, col2, col3, col4, col5, col6 = st.columns(6)
-col1.metric("Customers", f"{int(kpis['total_customers'])}")
-col2.metric("Orders", f"{int(kpis['total_orders'])}")
-col3.metric("Revenue", f"${kpis['total_revenue']:,.0f}")
-col4.metric("Avg Order", f"${kpis['avg_order_value']:,.2f}")
-col5.metric("Sessions", f"{int(kpis['total_sessions']):,}")
-col6.metric("Products", f"{int(kpis['total_products'])}")
+c1, c2, c3, c4, c5 = st.columns(5)
+c1.metric("Customers", f"{int(kpis['customers']):,}")
+c2.metric("Orders", f"{int(kpis['orders']):,}")
+c3.metric("Revenue", f"${kpis['revenue']:,.0f}")
+c4.metric("Avg Order Value", f"${kpis['aov']:,.2f}")
+c5.metric("Sessions", f"{int(kpis['sessions']):,}")
 
-st.divider()
+st.markdown("---")
 
-# ─── Tabs ───────────────────────────────────────────────────
+# ─── tabs ──────────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "🎯 Attribution", "🔄 Conversion Funnel", "📅 Cohort Retention",
-    "👥 RFM Segments", "💰 Customer LTV", "📈 Revenue & Products"
+    "Attribution", "Funnel", "Cohorts", "RFM", "LTV", "Revenue"
 ])
 
-# ─── TAB 1: Marketing Attribution ───────────────────────────
+# ═══════════════════════════════════════════════════════════
+# TAB 1 — Marketing Attribution
+# ═══════════════════════════════════════════════════════════
 with tab1:
-    st.subheader("Marketing Attribution Report")
-    st.caption("Which channels drive revenue vs just traffic?")
-
     attr = query("SELECT * FROM analytics_attribution ORDER BY total_revenue DESC")
 
-    col_a, col_b = st.columns(2)
+    left, right = st.columns(2)
 
-    with col_a:
+    with left:
         fig = px.bar(
             attr, x='total_revenue', y='channel', orientation='h',
-            color='channel', title='Revenue by Channel',
-            labels={'total_revenue': 'Revenue ($)', 'channel': ''},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            color_discrete_sequence=[COLORS[0]],
+            title='Revenue by acquisition channel'
         )
-        fig.update_layout(showlegend=False, height=350)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig)
         st.plotly_chart(fig, use_container_width=True)
 
-    with col_b:
+    with right:
         fig = px.bar(
             attr, x='conversion_rate', y='channel', orientation='h',
-            color='channel', title='Conversion Rate by Channel',
-            labels={'conversion_rate': 'Conversion Rate (%)', 'channel': ''},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            color_discrete_sequence=[COLORS[1]],
+            title='Session-to-purchase conversion rate (%)'
         )
-        fig.update_layout(showlegend=False, height=350)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig)
         st.plotly_chart(fig, use_container_width=True)
 
-    col_c, col_d = st.columns(2)
+    left2, right2 = st.columns(2)
 
-    with col_c:
+    with left2:
         fig = px.pie(
             attr, values='total_revenue', names='channel',
-            title='Revenue Share by Channel',
-            color_discrete_sequence=px.colors.qualitative.Set2
+            title='Revenue share', color_discrete_sequence=COLORS
         )
-        fig.update_layout(height=350)
+        fig.update_layout(
+            height=320, margin=dict(l=0, r=0, t=35, b=0),
+            title_font_size=14, showlegend=True,
+            legend=dict(font_size=11)
+        )
+        fig.update_traces(textposition='inside', textinfo='percent')
         st.plotly_chart(fig, use_container_width=True)
 
-    with col_d:
+    with right2:
         fig = px.bar(
             attr, x='channel', y='revenue_per_session',
-            color='channel', title='Revenue per Session (Efficiency)',
-            labels={'revenue_per_session': '$/Session', 'channel': ''},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            color_discrete_sequence=[COLORS[3]],
+            title='Revenue per session ($)'
         )
-        fig.update_layout(showlegend=False, height=350)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig)
         st.plotly_chart(fig, use_container_width=True)
 
+    # data table
     st.dataframe(
         attr[['channel', 'total_sessions', 'unique_visitors', 'conversions',
-              'conversion_rate', 'total_revenue', 'avg_order_value', 'revenue_per_session', 'revenue_share_pct']],
+              'conversion_rate', 'total_revenue', 'avg_order_value',
+              'revenue_per_session', 'revenue_share_pct']].rename(columns={
+            'total_sessions': 'sessions', 'unique_visitors': 'visitors',
+            'conversion_rate': 'conv %', 'total_revenue': 'revenue',
+            'avg_order_value': 'AOV', 'revenue_per_session': 'rev/session',
+            'revenue_share_pct': 'share %'
+        }),
         use_container_width=True, hide_index=True
     )
 
-    # insight box
+    # findings
     best = attr.loc[attr['conversion_rate'].idxmax()]
-    most_traffic = attr.loc[attr['total_sessions'].idxmax()]
-    st.info(
-        f"💡 **{best['channel']}** has the highest conversion rate ({best['conversion_rate']}%) "
-        f"but only {int(best['total_sessions'])} sessions. **{most_traffic['channel']}** drives the most "
-        f"traffic ({int(most_traffic['total_sessions'])} sessions) at {most_traffic['conversion_rate']}% conversion. "
-        f"**Recommendation:** Scale {best['channel']} traffic for higher ROI."
+    biggest = attr.loc[attr['total_sessions'].idxmax()]
+    st.markdown(
+        f"**Findings:** {best['channel']} converts best at {best['conversion_rate']}% "
+        f"but has limited traffic ({int(best['total_sessions'])} sessions). "
+        f"{biggest['channel']} has the most sessions ({int(biggest['total_sessions'])}) "
+        f"but converts at only {biggest['conversion_rate']}%. "
+        f"Scaling {best['channel']} traffic would likely have the highest ROI."
     )
 
 
-# ─── TAB 2: Conversion Funnel ──────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# TAB 2 — Conversion Funnel
+# ═══════════════════════════════════════════════════════════
 with tab2:
-    st.subheader("Checkout Conversion Funnel")
-    st.caption("User journey from first page view to completed purchase")
-
     funnel = query("SELECT * FROM analytics_funnel ORDER BY stage_order")
-    labels = ['Page View', 'Product View', 'Add to Cart', 'Checkout Start', 'Purchase']
-    funnel['label'] = labels
+    stage_labels = ['Page View', 'Product View', 'Add to Cart', 'Checkout Start', 'Purchase']
+    funnel['label'] = stage_labels
 
     fig = go.Figure(go.Funnel(
         y=funnel['label'],
         x=funnel['unique_users'],
         textinfo="value+percent initial",
-        marker=dict(color=['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'])
+        marker=dict(color=[COLORS[0], '#6a9ecf', '#8bb8d9', '#aed2e6', '#d0e8f2']),
+        connector=dict(line=dict(color='#e0e0e0'))
     ))
-    fig.update_layout(title='Checkout Funnel', height=400)
+    fig.update_layout(
+        height=380, margin=dict(l=0, r=0, t=10, b=0),
+        plot_bgcolor='white', paper_bgcolor='white'
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # drop-off table
-    funnel['drop_off'] = funnel['unique_users'].diff().fillna(0).astype(int)
-    funnel['drop_off_pct'] = ''
-    for i in range(1, len(funnel)):
-        prev = funnel.iloc[i-1]['unique_users']
-        if prev > 0:
-            drop = (prev - funnel.iloc[i]['unique_users']) / prev * 100
-            funnel.loc[funnel.index[i], 'drop_off_pct'] = f"{drop:.1f}%"
+    # calculate dropoffs
+    funnel['prev_users'] = funnel['unique_users'].shift(1)
+    funnel['drop_pct'] = ((funnel['prev_users'] - funnel['unique_users']) / funnel['prev_users'] * 100).round(1)
+    funnel.loc[funnel.index[0], 'drop_pct'] = 0
 
     overall = funnel.iloc[-1]['unique_users'] / funnel.iloc[0]['unique_users'] * 100
-    st.metric("Overall Conversion Rate", f"{overall:.1f}%")
 
-    st.dataframe(
-        funnel[['label', 'unique_users', 'unique_sessions', 'pct_of_total', 'drop_off_pct']].rename(
-            columns={'label': 'Stage', 'unique_users': 'Users', 'unique_sessions': 'Sessions',
-                     'pct_of_total': '% of Total', 'drop_off_pct': 'Drop-off'}
-        ),
-        use_container_width=True, hide_index=True
+    col_m, col_t = st.columns([1, 3])
+    with col_m:
+        st.metric("Overall conversion", f"{overall:.1f}%")
+    with col_t:
+        st.dataframe(
+            funnel[['label', 'unique_users', 'unique_sessions', 'pct_of_total', 'drop_pct']].rename(columns={
+                'label': 'Stage', 'unique_users': 'Users', 'unique_sessions': 'Sessions',
+                'pct_of_total': '% of top', 'drop_pct': 'Drop-off %'
+            }),
+            use_container_width=True, hide_index=True
+        )
+
+    worst_idx = funnel['drop_pct'].iloc[1:].idxmax()
+    worst_stage = funnel.loc[worst_idx, 'label']
+    worst_pct = funnel.loc[worst_idx, 'drop_pct']
+    st.markdown(
+        f"**Findings:** Largest drop-off is at **{worst_stage}** ({worst_pct}%). "
+        f"Cart abandonment emails and checkout simplification would help here."
     )
 
-    biggest_drop_idx = (funnel['unique_users'].diff().abs()).iloc[1:].idxmax()
-    drop_stage = funnel.loc[biggest_drop_idx, 'label']
-    st.warning(
-        f"⚠️ Biggest drop-off is at **{drop_stage}**. "
-        f"Optimizing this stage would have the highest impact on revenue."
-    )
 
-
-# ─── TAB 3: Cohort Retention ───────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# TAB 3 — Cohort Retention
+# ═══════════════════════════════════════════════════════════
 with tab3:
-    st.subheader("Cohort Retention Analysis")
-    st.caption("Do customers come back after their first month?")
-
     cohort = query("SELECT * FROM analytics_cohort_retention")
 
-    pivot = cohort.pivot_table(
+    # retention heatmap
+    pivot_ret = cohort.pivot_table(
         index='cohort_month', columns='months_since_signup',
         values='retention_rate', aggfunc='first'
     )
-    # limit to 0-6 months
-    cols_to_show = [c for c in pivot.columns if c <= 6]
-    pivot = pivot[cols_to_show]
+    pivot_ret = pivot_ret[[c for c in pivot_ret.columns if c <= 6]]
 
     fig = px.imshow(
-        pivot, text_auto='.0f', aspect='auto',
-        color_continuous_scale='YlGnBu',
-        labels=dict(x='Months Since Signup', y='Cohort', color='Retention %'),
-        title='Cohort Retention Heatmap (%)'
+        pivot_ret, text_auto='.0f', aspect='auto',
+        color_continuous_scale='Blues',
+        labels=dict(x='Months after signup', y='Signup cohort', color='Retention %'),
+        title='Retention rate by cohort (%)'
     )
-    fig.update_layout(height=500)
+    fig.update_layout(
+        height=450, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, coloraxis_showscale=True
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    # cohort revenue
-    rev_pivot = cohort.pivot_table(
+    # revenue heatmap
+    pivot_rev = cohort.pivot_table(
         index='cohort_month', columns='months_since_signup',
         values='cohort_revenue', aggfunc='sum'
     )
-    rev_cols = [c for c in rev_pivot.columns if c <= 6]
-    rev_pivot = rev_pivot[rev_cols]
+    pivot_rev = pivot_rev[[c for c in pivot_rev.columns if c <= 6]]
 
     fig2 = px.imshow(
-        rev_pivot, text_auto=',.0f', aspect='auto',
-        color_continuous_scale='Oranges',
-        labels=dict(x='Months Since Signup', y='Cohort', color='Revenue ($)'),
-        title='Cohort Revenue Heatmap ($)'
+        pivot_rev, text_auto=',.0f', aspect='auto',
+        color_continuous_scale='OrRd',
+        labels=dict(x='Months after signup', y='Signup cohort', color='Revenue $'),
+        title='Revenue by cohort ($)'
     )
-    fig2.update_layout(height=500)
+    fig2.update_layout(
+        height=450, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, coloraxis_showscale=True
+    )
     st.plotly_chart(fig2, use_container_width=True)
 
+    st.markdown(
+        "**Findings:** Month-0 retention is naturally highest. "
+        "The drop from month 0 to month 1 is where most churn happens. "
+        "A post-purchase email series in the first 30 days could improve month-1 retention."
+    )
 
-# ─── TAB 4: RFM Segments ───────────────────────────────────
+
+# ═══════════════════════════════════════════════════════════
+# TAB 4 — RFM Segmentation
+# ═══════════════════════════════════════════════════════════
 with tab4:
-    st.subheader("RFM Customer Segmentation")
-    st.caption("Recency × Frequency × Monetary scoring for customer targeting")
-
-    rfm_summary = query("""
+    rfm_agg = query("""
         SELECT rfm_segment, COUNT(*) AS customers,
                ROUND(AVG(monetary), 2) AS avg_spend,
                ROUND(AVG(frequency), 1) AS avg_orders,
-               ROUND(AVG(recency_days), 0) AS avg_recency_days
-        FROM analytics_rfm GROUP BY rfm_segment ORDER BY customers DESC
+               ROUND(AVG(recency_days), 0) AS avg_recency
+        FROM analytics_rfm GROUP BY rfm_segment ORDER BY avg_spend DESC
     """)
 
-    col1, col2 = st.columns(2)
+    left, right = st.columns(2)
 
-    with col1:
+    with left:
         fig = px.bar(
-            rfm_summary, x='customers', y='rfm_segment', orientation='h',
-            color='rfm_segment', title='Customers per RFM Segment',
-            color_discrete_sequence=px.colors.qualitative.Set2
+            rfm_agg, x='customers', y='rfm_segment', orientation='h',
+            color_discrete_sequence=[COLORS[0]],
+            title='Customers by segment'
         )
-        fig.update_layout(showlegend=False, height=400)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig, 380)
         st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
+    with right:
         fig = px.bar(
-            rfm_summary, x='avg_spend', y='rfm_segment', orientation='h',
-            color='rfm_segment', title='Avg Lifetime Spend by Segment',
-            color_discrete_sequence=px.colors.qualitative.Set2
+            rfm_agg, x='avg_spend', y='rfm_segment', orientation='h',
+            color_discrete_sequence=[COLORS[4]],
+            title='Avg lifetime spend by segment'
         )
-        fig.update_layout(showlegend=False, height=400)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig, 380)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.dataframe(rfm_summary, use_container_width=True, hide_index=True)
+    st.dataframe(rfm_agg, use_container_width=True, hide_index=True)
 
-    # scatter: recency vs monetary colored by segment
-    rfm_detail = query("SELECT * FROM analytics_rfm")
+    # scatter plot
+    rfm_all = query("SELECT * FROM analytics_rfm")
     fig = px.scatter(
-        rfm_detail, x='recency_days', y='monetary', color='rfm_segment',
+        rfm_all, x='recency_days', y='monetary', color='rfm_segment',
         size='frequency', hover_data=['full_name', 'acquisition_channel'],
-        title='Customer Map: Recency vs Spend (size = order frequency)',
-        labels={'recency_days': 'Days Since Last Order', 'monetary': 'Lifetime Spend ($)'},
-        color_discrete_sequence=px.colors.qualitative.Set2
+        color_discrete_sequence=COLORS,
+        title='Recency vs lifetime spend (size = order count)'
     )
-    fig.update_layout(height=500)
+    fig.update_layout(
+        height=480, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, plot_bgcolor='white',
+        legend=dict(font_size=10, orientation='h', y=-0.15)
+    )
+    fig.update_xaxes(title='Days since last order', showgrid=True, gridcolor='#f0f0f0')
+    fig.update_yaxes(title='Lifetime spend ($)', showgrid=True, gridcolor='#f0f0f0')
     st.plotly_chart(fig, use_container_width=True)
 
-    champions = rfm_summary[rfm_summary['rfm_segment'] == 'Champions']
-    at_risk = rfm_summary[rfm_summary['rfm_segment'] == 'At Risk']
-    if not champions.empty and not at_risk.empty:
-        st.info(
-            f"💡 **Champions** ({int(champions.iloc[0]['customers'])} customers, "
-            f"avg ${champions.iloc[0]['avg_spend']:,.0f}) are your best — reward them. "
-            f"**At Risk** ({int(at_risk.iloc[0]['customers'])} customers) need win-back campaigns now."
-        )
+    champs = rfm_agg[rfm_agg['rfm_segment'] == 'Champions']
+    at_risk = rfm_agg[rfm_agg['rfm_segment'] == 'At Risk']
+    findings = "**Findings:** "
+    if not champs.empty:
+        findings += f"Champions ({int(champs.iloc[0]['customers'])} customers, avg ${champs.iloc[0]['avg_spend']:,.0f} spend) should get loyalty rewards. "
+    if not at_risk.empty:
+        findings += f"At Risk segment ({int(at_risk.iloc[0]['customers'])} customers) needs win-back campaigns before they churn."
+    st.markdown(findings)
 
 
-# ─── TAB 5: Customer LTV ───────────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# TAB 5 — Customer LTV
+# ═══════════════════════════════════════════════════════════
 with tab5:
-    st.subheader("Customer Lifetime Value Analysis")
-    st.caption("Which acquisition channels produce the most valuable customers?")
-
     ltv = query("""
-        SELECT acquisition_channel,
+        SELECT acquisition_channel AS channel,
                SUM(num_customers) AS customers,
                ROUND(SUM(total_ltv) / SUM(num_customers), 2) AS avg_ltv,
                ROUND(SUM(CASE WHEN customer_segment != 'never_purchased' THEN num_customers ELSE 0 END)
@@ -295,112 +359,128 @@ with tab5:
         GROUP BY acquisition_channel ORDER BY avg_ltv DESC
     """)
 
-    col1, col2 = st.columns(2)
+    left, right = st.columns(2)
 
-    with col1:
+    with left:
         fig = px.bar(
-            ltv, x='acquisition_channel', y='avg_ltv', color='acquisition_channel',
-            title='Average Customer LTV by Channel',
-            labels={'avg_ltv': 'Avg LTV ($)', 'acquisition_channel': ''},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            ltv, x='channel', y='avg_ltv',
+            color_discrete_sequence=[COLORS[0]],
+            title='Average customer LTV by channel'
         )
-        fig.update_layout(showlegend=False, height=400)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig)
         st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
+    with right:
         fig = px.bar(
-            ltv, x='acquisition_channel', y='purchase_rate', color='acquisition_channel',
-            title='Purchase Rate by Channel',
-            labels={'purchase_rate': 'Purchase Rate (%)', 'acquisition_channel': ''},
-            color_discrete_sequence=px.colors.qualitative.Set2
+            ltv, x='channel', y='purchase_rate',
+            color_discrete_sequence=[COLORS[4]],
+            title='Purchase rate by channel (%)'
         )
-        fig.update_layout(showlegend=False, height=400)
+        fig.update_traces(marker_line_width=0)
+        clean_chart(fig)
         st.plotly_chart(fig, use_container_width=True)
 
     st.dataframe(ltv, use_container_width=True, hide_index=True)
 
-    # segment breakdown
+    # treemap
     ltv_detail = query("""
-        SELECT customer_segment, acquisition_channel, num_customers, avg_ltv, avg_orders, purchase_rate
+        SELECT customer_segment, acquisition_channel AS channel,
+               num_customers, avg_ltv, avg_orders
         FROM analytics_customer_ltv
         WHERE customer_segment != 'never_purchased'
         ORDER BY avg_ltv DESC
     """)
 
     fig = px.treemap(
-        ltv_detail, path=['acquisition_channel', 'customer_segment'],
+        ltv_detail, path=['channel', 'customer_segment'],
         values='num_customers', color='avg_ltv',
         color_continuous_scale='Greens',
-        title='Customer Segments by Channel (color = avg LTV)'
+        title='Segment breakdown by channel (color = LTV)'
     )
-    fig.update_layout(height=450)
+    fig.update_layout(height=420, margin=dict(l=0, r=0, t=35, b=0), title_font_size=14)
     st.plotly_chart(fig, use_container_width=True)
 
-    best = ltv.iloc[0]
-    st.success(
-        f"💰 **{best['acquisition_channel']}** produces the highest-LTV customers "
-        f"(avg ${best['avg_ltv']:,.2f}). If your CAC for this channel is below this, scale it."
+    best_ch = ltv.iloc[0]
+    st.markdown(
+        f"**Findings:** {best_ch['channel']} produces the highest-LTV customers "
+        f"(${best_ch['avg_ltv']:,.2f} avg). If CAC for this channel stays below that, "
+        f"it's worth scaling."
     )
 
 
-# ─── TAB 6: Revenue & Products ─────────────────────────────
+# ═══════════════════════════════════════════════════════════
+# TAB 6 — Revenue Trends & Products
+# ═══════════════════════════════════════════════════════════
 with tab6:
-    st.subheader("Revenue Trends & Product Performance")
-
     rev = query("SELECT * FROM analytics_revenue_trends ORDER BY order_month")
 
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=rev['order_month'], y=rev['new_customer_revenue'],
-                         name='New Customers', marker_color='#66c2a5'))
-    fig.add_trace(go.Bar(x=rev['order_month'], y=rev['returning_customer_revenue'],
-                         name='Returning Customers', marker_color='#fc8d62'))
+    fig.add_trace(go.Bar(
+        x=rev['order_month'], y=rev['new_customer_revenue'],
+        name='New customers', marker_color=COLORS[0]
+    ))
+    fig.add_trace(go.Bar(
+        x=rev['order_month'], y=rev['returning_customer_revenue'],
+        name='Returning customers', marker_color=COLORS[1]
+    ))
     fig.update_layout(
-        barmode='stack', title='Monthly Revenue: New vs Returning',
-        xaxis_title='Month', yaxis_title='Revenue ($)', height=400
+        barmode='stack', title='Monthly revenue — new vs returning',
+        height=380, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, plot_bgcolor='white',
+        legend=dict(font_size=11, orientation='h', y=1.05)
     )
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0', title='Revenue ($)')
     st.plotly_chart(fig, use_container_width=True)
 
-    col1, col2 = st.columns(2)
+    left, right = st.columns(2)
 
-    with col1:
+    with left:
         fig = px.line(
-            rev, x='order_month', y='avg_order_value',
-            title='Average Order Value Trend', markers=True,
-            labels={'avg_order_value': 'AOV ($)', 'order_month': 'Month'}
+            rev, x='order_month', y='avg_order_value', markers=True,
+            title='AOV trend', color_discrete_sequence=[COLORS[0]]
         )
-        fig.update_layout(height=350)
+        clean_chart(fig, 320)
         st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
-        # channel x device heatmap
+    with right:
         cd = query("SELECT * FROM analytics_channel_device")
         pivot_cd = cd.pivot_table(index='channel', columns='device_type', values='conversion_rate')
         fig = px.imshow(
             pivot_cd, text_auto='.1f', color_continuous_scale='RdYlGn',
-            title='Conversion Rate: Channel × Device',
-            labels=dict(color='Conv %')
+            title='Conversion: channel x device'
         )
-        fig.update_layout(height=350)
+        fig.update_layout(
+            height=320, margin=dict(l=0, r=0, t=35, b=0),
+            title_font_size=14, coloraxis_showscale=True
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     # top products
     products = query("""
-        SELECT product_name, category, price, total_views, total_purchases,
-               total_revenue, view_to_cart_rate, cart_to_purchase_rate
+        SELECT product_name, category, total_revenue, total_purchases,
+               view_to_cart_rate, cart_to_purchase_rate
         FROM dim_products WHERE total_views > 0
-        ORDER BY total_revenue DESC LIMIT 15
+        ORDER BY total_revenue DESC LIMIT 10
     """)
 
     fig = px.bar(
-        products.head(10), x='total_revenue', y='product_name', orientation='h',
-        color='category', title='Top 10 Products by Revenue',
-        labels={'total_revenue': 'Revenue ($)', 'product_name': ''},
-        color_discrete_sequence=px.colors.qualitative.Set2
+        products, x='total_revenue', y='product_name', orientation='h',
+        color='category', title='Top 10 products by revenue',
+        color_discrete_sequence=COLORS
     )
-    fig.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
+    fig.update_layout(
+        height=380, margin=dict(l=0, r=10, t=35, b=0),
+        title_font_size=14, plot_bgcolor='white',
+        yaxis={'categoryorder': 'total ascending'},
+        legend=dict(font_size=10, orientation='h', y=-0.15)
+    )
+    fig.update_xaxes(showgrid=True, gridcolor='#f0f0f0', title='Revenue ($)')
+    fig.update_yaxes(showgrid=False)
     st.plotly_chart(fig, use_container_width=True)
 
-    # product scatter
+    # conversion scatter
     all_prods = query("""
         SELECT product_name, category, view_to_cart_rate, cart_to_purchase_rate, total_revenue
         FROM dim_products WHERE total_views > 5
@@ -408,14 +488,14 @@ with tab6:
     fig = px.scatter(
         all_prods, x='view_to_cart_rate', y='cart_to_purchase_rate',
         size='total_revenue', color='category', hover_name='product_name',
-        title='Product Conversion Rates (bubble size = revenue)',
-        labels={'view_to_cart_rate': 'View → Cart %', 'cart_to_purchase_rate': 'Cart → Purchase %'},
-        color_discrete_sequence=px.colors.qualitative.Set2
+        color_discrete_sequence=COLORS,
+        title='Product conversion rates (size = revenue)'
     )
-    fig.update_layout(height=450)
+    fig.update_layout(
+        height=420, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, plot_bgcolor='white',
+        legend=dict(font_size=10, orientation='h', y=-0.12)
+    )
+    fig.update_xaxes(title='View to cart %', showgrid=True, gridcolor='#f0f0f0')
+    fig.update_yaxes(title='Cart to purchase %', showgrid=True, gridcolor='#f0f0f0')
     st.plotly_chart(fig, use_container_width=True)
-
-
-# ─── Footer ────────────────────────────────────────────────
-st.divider()
-st.caption("Built with Python, SQL, Pandas, Plotly & Streamlit · Data pipeline: ETL → SQL Transformations → Analytics")
