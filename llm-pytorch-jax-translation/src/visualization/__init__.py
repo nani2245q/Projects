@@ -1,1 +1,1 @@
-from .plots import BenchmarkVisualizer
+from visualization.plots import BenchmarkVisualizer

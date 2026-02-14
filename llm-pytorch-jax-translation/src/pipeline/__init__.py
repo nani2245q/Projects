@@ -1,2 +1,2 @@
-from .kernel_loader import KernelLoader
-from .benchmark_runner import BenchmarkRunner
+from pipeline.kernel_loader import KernelLoader
+from pipeline.benchmark_runner import BenchmarkRunner

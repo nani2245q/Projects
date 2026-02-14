@@ -1,2 +1,2 @@
-from .aqs_scorer import AQSScorer
-from .statistical_analysis import StatisticalAnalyzer
+from analysis.aqs_scorer import AQSScorer
+from analysis.statistical_analysis import StatisticalAnalyzer

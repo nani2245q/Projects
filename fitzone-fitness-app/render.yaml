@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: fitzone-fitness-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: default
+      - key: PORT
+        value: 8080

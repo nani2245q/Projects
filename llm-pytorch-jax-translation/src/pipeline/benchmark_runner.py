@@ -8,9 +8,9 @@ import os
 import json
 from datetime import datetime
 
-from .kernel_loader import KernelLoader
-from ..analysis.aqs_scorer import AQSScorer
-from ..analysis.statistical_analysis import StatisticalAnalyzer
+from pipeline.kernel_loader import KernelLoader
+from analysis.aqs_scorer import AQSScorer
+from analysis.statistical_analysis import StatisticalAnalyzer
 
 
 class BenchmarkRunner:
