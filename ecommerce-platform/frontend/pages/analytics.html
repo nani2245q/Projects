@@ -18,7 +18,7 @@
     </div>
   </nav>
 
-  <div class="container">
+  <div class="dash-container">
     <div class="page-header">
       <h1>Commerce Analytics Dashboard</h1>
       <p>Conversion funnel, revenue metrics, marketing attribution & customer cohorts</p>
@@ -34,40 +34,37 @@
       <!-- KPI Cards -->
       <div class="kpi-grid" id="kpi-grid"></div>
 
-      <!-- Conversion Funnel -->
-      <div class="chart-container">
-        <h3>Checkout Conversion Funnel</h3>
-        <p style="color: var(--gray-500); font-size: 0.85rem; margin-bottom: 1rem;">
-          User journey from page view to purchase — drop-off rates shown in red
-        </p>
-        <div class="funnel-chart" id="funnel-chart"></div>
-        <p style="margin-top: 1rem; font-weight: 600;">
-          Overall Conversion Rate: <span id="overall-conversion" style="color: var(--primary);">—</span>
-        </p>
-      </div>
-
-      <!-- Revenue Time Series -->
-      <div class="chart-container">
-        <h3>Revenue Over Time</h3>
-        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-          <button class="btn btn-sm btn-outline" onclick="loadRevenue('day')">Daily</button>
-          <button class="btn btn-sm btn-outline" onclick="loadRevenue('week')">Weekly</button>
-          <button class="btn btn-sm btn-outline" onclick="loadRevenue('month')">Monthly</button>
+      <!-- Row 1: Funnel + Revenue side by side -->
+      <div class="dash-row">
+        <div class="chart-container">
+          <h3>Checkout Conversion Funnel</h3>
+          <p class="chart-subtitle">User journey from page view to purchase</p>
+          <div class="funnel-chart" id="funnel-chart"></div>
+          <p class="funnel-summary">
+            Overall Conversion Rate: <span id="overall-conversion">—</span>
+          </p>
         </div>
-        <canvas id="revenue-chart" height="300"></canvas>
+
+        <div class="chart-container">
+          <h3>Revenue Over Time</h3>
+          <div class="btn-group">
+            <button class="btn btn-sm btn-outline" onclick="loadRevenue('day')">Daily</button>
+            <button class="btn btn-sm btn-outline" onclick="loadRevenue('week')">Weekly</button>
+            <button class="btn btn-sm btn-outline" onclick="loadRevenue('month')">Monthly</button>
+          </div>
+          <canvas id="revenue-chart"></canvas>
+        </div>
       </div>
 
-      <!-- Marketing Attribution -->
+      <!-- Row 2: Attribution Charts side by side -->
       <div class="chart-container">
         <h3>Marketing Attribution Report</h3>
-        <p style="color: var(--gray-500); font-size: 0.85rem; margin-bottom: 1rem;">
-          Revenue, sessions, and conversion rate by acquisition channel
-        </p>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
-          <canvas id="attribution-revenue-chart" height="250"></canvas>
-          <canvas id="attribution-conversion-chart" height="250"></canvas>
+        <p class="chart-subtitle">Revenue, sessions, and conversion rate by acquisition channel</p>
+        <div class="dash-row dash-row-inner">
+          <div><canvas id="attribution-revenue-chart"></canvas></div>
+          <div><canvas id="attribution-conversion-chart"></canvas></div>
         </div>
-        <table class="data-table" style="margin-top: 1rem;" id="attribution-table">
+        <table class="data-table" id="attribution-table">
           <thead>
             <tr>
               <th>Channel</th>
@@ -83,30 +80,29 @@
         </table>
       </div>
 
-      <!-- Category Performance -->
-      <div class="chart-container">
-        <h3>Category Performance</h3>
-        <table class="data-table" id="category-table">
-          <thead>
-            <tr>
-              <th>Category</th>
-              <th>Products</th>
-              <th>Views</th>
-              <th>Add to Cart</th>
-              <th>Purchases</th>
-              <th>View→Cart</th>
-              <th>Cart→Purchase</th>
-              <th>Revenue</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <!-- Row 3: Category + Top Products side by side -->
+      <div class="dash-row">
+        <div class="chart-container">
+          <h3>Category Performance</h3>
+          <table class="data-table data-table-compact" id="category-table">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Views</th>
+                <th>Cart</th>
+                <th>Purchased</th>
+                <th>View→Cart</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
 
-      <!-- Top Products -->
-      <div class="chart-container">
-        <h3>Top Products by Purchases</h3>
-        <canvas id="top-products-chart" height="250"></canvas>
+        <div class="chart-container">
+          <h3>Top Products by Purchases</h3>
+          <canvas id="top-products-chart"></canvas>
+        </div>
       </div>
     </div>
   </div>

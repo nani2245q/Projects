@@ -5,6 +5,15 @@ let topProductsChart = null;
 
 const CHART_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0891b2'];
 
+const COMPACT_OPTS = {
+  responsive: true,
+  maintainAspectRatio: true,
+  aspectRatio: 1.8,
+  plugins: {
+    legend: { labels: { font: { size: 11 }, boxWidth: 12 } }
+  }
+};
+
 async function apiFetch(endpoint) {
   const res = await fetch(`${API_BASE}${endpoint}`, { headers: authHeaders() });
   if (res.status === 401 || res.status === 403) {
@@ -28,7 +37,7 @@ async function loadKPIs() {
         <div class="kpi-label">30-Day Revenue</div>
         <div class="kpi-value">$${kpis.last30DaysRevenue.toLocaleString()}</div>
         <div class="kpi-change ${kpis.revenueGrowth >= 0 ? 'positive' : 'negative'}">
-          ${kpis.revenueGrowth >= 0 ? '↑' : '↓'} ${Math.abs(kpis.revenueGrowth)}% vs prior 30 days
+          ${kpis.revenueGrowth >= 0 ? '+' : ''}${kpis.revenueGrowth}%
         </div>
       </div>
       <div class="kpi-card">
@@ -45,12 +54,11 @@ async function loadKPIs() {
         <div class="kpi-value">${kpis.totalCustomers}</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">30-Day Events Tracked</div>
+        <div class="kpi-label">Events Tracked</div>
         <div class="kpi-value">${kpis.last30DaysEvents.toLocaleString()}</div>
       </div>
     `;
 
-    // Top products bar chart
     renderTopProducts(topProducts);
   } catch (err) {
     if (err.message !== 'Unauthorized') console.error('KPI load error:', err);
@@ -72,9 +80,9 @@ async function loadFunnel() {
           <div class="funnel-label">${stage.label}</div>
           <div class="funnel-bar-wrapper">
             <div class="funnel-bar" style="width: ${width}%">
-              ${stage.uniqueUsers} users
+              ${stage.uniqueUsers}
             </div>
-            ${parseFloat(stage.dropOffRate) > 0 ? `<span class="funnel-dropoff">↓ ${stage.dropOffRate}% drop-off</span>` : ''}
+            ${parseFloat(stage.dropOffRate) > 0 ? `<span class="funnel-dropoff">${stage.dropOffRate}%</span>` : ''}
           </div>
         </div>
       `;
@@ -87,7 +95,7 @@ async function loadFunnel() {
 }
 
 // ─── Revenue Time Series ────────────────────────────────────────────
-async function loadRevenue(granularity = 'day') {
+async function loadRevenue(granularity = 'month') {
   try {
     const data = await apiFetch(`/analytics/revenue?granularity=${granularity}`);
 
@@ -103,7 +111,7 @@ async function loadRevenue(granularity = 'day') {
             label: 'Revenue ($)',
             data: data.timeSeries.map(t => t.revenue),
             backgroundColor: '#2563eb',
-            borderRadius: 4,
+            borderRadius: 3,
             yAxisID: 'y'
           },
           {
@@ -113,23 +121,28 @@ async function loadRevenue(granularity = 'day') {
             borderColor: '#db2777',
             backgroundColor: 'transparent',
             tension: 0.3,
+            pointRadius: 2,
+            borderWidth: 2,
             yAxisID: 'y1'
           }
         ]
       },
       options: {
-        responsive: true,
+        ...COMPACT_OPTS,
         interaction: { mode: 'index', intersect: false },
         scales: {
+          x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
           y: {
             type: 'linear',
             position: 'left',
-            title: { display: true, text: 'Revenue ($)' }
+            title: { display: true, text: 'Revenue ($)', font: { size: 10 } },
+            ticks: { font: { size: 10 } }
           },
           y1: {
             type: 'linear',
             position: 'right',
-            title: { display: true, text: 'Order Count' },
+            title: { display: true, text: 'Orders', font: { size: 10 } },
+            ticks: { font: { size: 10 } },
             grid: { drawOnChartArea: false }
           }
         }
@@ -145,7 +158,6 @@ async function loadAttribution() {
   try {
     const data = await apiFetch('/analytics/attribution');
 
-    // Revenue by channel chart
     const revCtx = document.getElementById('attribution-revenue-chart').getContext('2d');
     if (attrRevenueChart) attrRevenueChart.destroy();
 
@@ -160,13 +172,15 @@ async function loadAttribution() {
       },
       options: {
         responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.4,
         plugins: {
-          title: { display: true, text: 'Revenue by Channel' }
+          title: { display: true, text: 'Revenue by Channel', font: { size: 12 } },
+          legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } }
         }
       }
     });
 
-    // Conversion rate by channel
     const convCtx = document.getElementById('attribution-conversion-chart').getContext('2d');
     if (attrConversionChart) attrConversionChart.destroy();
 
@@ -175,18 +189,22 @@ async function loadAttribution() {
       data: {
         labels: data.attribution.map(a => a.channel),
         datasets: [{
-          label: 'Conversion Rate (%)',
+          label: 'Conv. Rate (%)',
           data: data.attribution.map(a => parseFloat(a.conversionRate)),
           backgroundColor: CHART_COLORS
         }]
       },
       options: {
         responsive: true,
+        maintainAspectRatio: true,
+        aspectRatio: 1.4,
         plugins: {
-          title: { display: true, text: 'Conversion Rate by Channel' }
+          title: { display: true, text: 'Conversion Rate by Channel', font: { size: 12 } },
+          legend: { display: false }
         },
         scales: {
-          y: { title: { display: true, text: 'Conversion %' } }
+          x: { ticks: { font: { size: 10 } } },
+          y: { title: { display: true, text: '%', font: { size: 10 } }, ticks: { font: { size: 10 } } }
         }
       }
     });
@@ -218,12 +236,10 @@ async function loadCategories() {
     tbody.innerHTML = data.categories.map(c => `
       <tr>
         <td><strong>${c.category}</strong></td>
-        <td>${c.productCount}</td>
         <td>${c.totalViews.toLocaleString()}</td>
         <td>${c.totalAddToCarts.toLocaleString()}</td>
         <td>${c.totalPurchases.toLocaleString()}</td>
         <td>${c.viewToCartRate}%</td>
-        <td>${c.cartToPurchaseRate}%</td>
         <td>$${c.totalRevenue.toLocaleString()}</td>
       </tr>
     `).join('');
@@ -240,7 +256,7 @@ function renderTopProducts(products) {
   topProductsChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: products.map(p => p.name.substring(0, 25)),
+      labels: products.map(p => p.name.length > 20 ? p.name.substring(0, 20) + '...' : p.name),
       datasets: [
         {
           label: 'Views',
@@ -255,10 +271,11 @@ function renderTopProducts(products) {
       ]
     },
     options: {
-      responsive: true,
+      ...COMPACT_OPTS,
       indexAxis: 'y',
       scales: {
-        x: { stacked: false }
+        x: { stacked: false, ticks: { font: { size: 10 } } },
+        y: { ticks: { font: { size: 10 } } }
       }
     }
   });
@@ -276,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   loadKPIs();
   loadFunnel();
-  loadRevenue('day');
+  loadRevenue('month');
   loadAttribution();
   loadCategories();
 });
