@@ -4,11 +4,24 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const connectDB = require('./config/db');
+const Product = require('./models/Product');
 
 const app = express();
 
-// connect to db
-connectDB();
+// connect to db then auto-seed if empty
+connectDB().then(async () => {
+  try {
+    const count = await Product.countDocuments();
+    if (count === 0) {
+      console.log('No products found — running auto-seed...');
+      const seed = require('./seeds/seed');
+      await seed(true);
+      console.log('Auto-seed complete!');
+    }
+  } catch (err) {
+    console.error('Auto-seed check failed:', err.message);
+  }
+});
 
 // middleware
 app.use(cors());

@@ -33,10 +33,12 @@ const products = [
   { name: 'The Lean Startup', description: 'Eric Ries — build, measure, learn', price: 16.99, category: 'books', sku: 'BOOK-003', inventory: 100, tags: ['business', 'startup', 'lean'] }
 ];
 
-async function seed() {
+async function seed(alreadyConnected = false) {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('Connected to MongoDB');
+    if (!alreadyConnected) {
+      await mongoose.connect(process.env.MONGODB_URI);
+      console.log('Connected to MongoDB');
+    }
 
     // wipe everything first
     await Promise.all([
@@ -255,12 +257,19 @@ async function seed() {
     console.log(`Events: ${events.length}`);
     console.log(`Orders: ${orders.length}`);
 
-    await mongoose.connection.close();
-    process.exit(0);
+    if (!alreadyConnected) {
+      await mongoose.connection.close();
+      process.exit(0);
+    }
   } catch (err) {
     console.error('Seed error:', err);
-    process.exit(1);
+    if (!alreadyConnected) process.exit(1);
   }
 }
 
-seed();
+module.exports = seed;
+
+// run directly: node seed.js
+if (require.main === module) {
+  seed(false);
+}
