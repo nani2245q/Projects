@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitZone - Fitness Tracker</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">FitZone</div>
+        <div class="nav-links">
+            <a href="/" class="active">Dashboard</a>
+            <a href="/pages/workouts.html">Workouts</a>
+            <a href="/pages/exercises.html">Exercises</a>
+            <a href="/pages/activity.html">Activity Log</a>
+            <span id="user-name"></span>
+            <a href="/pages/login.html" id="auth-link">Login</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section id="dashboard-auth" style="display:none">
+            <p>Please <a href="/pages/login.html">login</a> to view your dashboard.</p>
+        </section>
+
+        <section id="dashboard" style="display:none">
+            <h1>Your Dashboard</h1>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-value" id="total-workouts">0</div>
+                    <div class="kpi-label">Workouts Completed</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="total-calories">0</div>
+                    <div class="kpi-label">Calories Burned</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="avg-steps">0</div>
+                    <div class="kpi-label">Avg Steps / Day</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-value" id="avg-sleep">0</div>
+                    <div class="kpi-label">Avg Sleep (hrs)</div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>Recent Workouts</h2>
+                    <table class="data-table">
+                        <thead><tr><th>Name</th><th>Duration</th><th>Calories</th><th>Date</th></tr></thead>
+                        <tbody id="recent-workouts"></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h2>Weekly Activity</h2>
+                    <canvas id="weekly-chart" width="400" height="250"></canvas>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/config.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

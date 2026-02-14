@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FitZone - Exercise Library</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">FitZone</div>
+        <div class="nav-links">
+            <a href="/">Dashboard</a>
+            <a href="/pages/workouts.html">Workouts</a>
+            <a href="/pages/exercises.html" class="active">Exercises</a>
+            <a href="/pages/activity.html">Activity Log</a>
+            <span id="user-name"></span>
+            <a href="/pages/login.html" id="auth-link">Login</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        <h1>Exercise Library</h1>
+        <div style="display:flex;gap:1rem;margin:1rem 0;flex-wrap:wrap">
+            <select id="filter-muscle" onchange="loadExercises()">
+                <option value="">All Muscle Groups</option>
+                <option value="CHEST">Chest</option>
+                <option value="BACK">Back</option>
+                <option value="SHOULDERS">Shoulders</option>
+                <option value="ARMS">Arms</option>
+                <option value="LEGS">Legs</option>
+                <option value="CORE">Core</option>
+                <option value="FULL_BODY">Full Body</option>
+                <option value="CARDIO">Cardio</option>
+            </select>
+            <select id="filter-category" onchange="loadExercises()">
+                <option value="">All Categories</option>
+                <option value="STRENGTH">Strength</option>
+                <option value="CARDIO">Cardio</option>
+                <option value="FLEXIBILITY">Flexibility</option>
+                <option value="HIIT">HIIT</option>
+                <option value="BALANCE">Balance</option>
+            </select>
+            <input type="text" id="search" placeholder="Search exercises..." oninput="loadExercises()" style="flex:1;min-width:200px;padding:.5rem .8rem;border:1px solid var(--border);border-radius:6px">
+        </div>
+
+        <div id="exercises" class="exercise-grid"></div>
+    </main>
+
+    <script src="/js/config.js"></script>
+    <script>
+        async function loadExercises() {
+            const muscle = document.getElementById('filter-muscle').value;
+            const category = document.getElementById('filter-category').value;
+            const search = document.getElementById('search').value;
+
+            let url = '/api/exercises';
+            if (muscle) url = `/api/exercises/muscle-group/${muscle}`;
+            else if (category) url = `/api/exercises/category/${category}`;
+            else if (search) url = `/api/exercises/search?q=${encodeURIComponent(search)}`;
+
+            const exercises = await apiFetch(url);
+            const container = document.getElementById('exercises');
+            container.innerHTML = '';
+
+            (Array.isArray(exercises) ? exercises : []).forEach(ex => {
+                const card = document.createElement('div');
+                card.className = 'exercise-card';
+                card.innerHTML = `
+                    <h3>${ex.name}</h3>
+                    <p class="meta">${ex.description || ''}</p>
+                    <div style="margin-top:.5rem">
+                        <span class="badge">${ex.muscleGroup || ''}</span>
+                        <span class="badge">${ex.category || ''}</span>
+                        ${ex.difficulty ? `<span class="badge">${ex.difficulty}</span>` : ''}
+                    </div>
+                    <p class="meta" style="margin-top:.4rem">${ex.caloriesPerMinute ? ex.caloriesPerMinute + ' cal/min' : ''}</p>
+                `;
+                container.appendChild(card);
+            });
+
+            if (container.children.length === 0) {
+                container.innerHTML = '<p style="color:var(--text-light)">No exercises found.</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadExercises);
+    </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cart — ShopAnalytics</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="logo">ShopAnalytics</a>
+    <div class="nav-links">
+      <a href="/">Products</a>
+      <a href="/pages/cart.html" class="active">Cart <span class="cart-badge" id="cart-count">0</span></a>
+      <a href="/pages/analytics.html">Analytics</a>
+      <a href="/pages/login.html" id="auth-link">Login</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <h1>Shopping Cart</h1>
+    </div>
+
+    <div id="cart-empty" class="hidden">
+      <p>Your cart is empty. <a href="/">Browse products</a></p>
+    </div>
+
+    <div id="cart-items"></div>
+
+    <div id="cart-summary" class="cart-summary hidden">
+      <div class="summary-row">
+        <span>Subtotal</span>
+        <span id="subtotal">$0.00</span>
+      </div>
+      <div class="summary-row">
+        <span>Tax (8%)</span>
+        <span id="tax">$0.00</span>
+      </div>
+      <div class="summary-row">
+        <span>Shipping</span>
+        <span id="shipping">$0.00</span>
+      </div>
+      <div class="summary-row summary-total">
+        <span>Total</span>
+        <span id="total">$0.00</span>
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top: 1rem" onclick="checkout()">
+        Proceed to Checkout
+      </button>
+    </div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/tracking.js"></script>
+  <script src="/js/cart.js"></script>
+</body>
+</html>

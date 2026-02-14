@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — ShopAnalytics</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="/" class="logo">ShopAnalytics</a>
+    <div class="nav-links">
+      <a href="/">Products</a>
+      <a href="/pages/cart.html">Cart</a>
+      <a href="/pages/analytics.html">Analytics</a>
+      <a href="/pages/login.html" class="active" id="auth-link">Login</a>
+    </div>
+  </nav>
+
+  <div class="auth-container">
+    <div class="tab-bar">
+      <button class="active" onclick="showTab('login')">Login</button>
+      <button onclick="showTab('register')">Register</button>
+    </div>
+
+    <div id="alert-box"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" required placeholder="admin@ecommerce.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" required placeholder="admin123">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Login</button>
+    </form>
+
+    <form id="register-form" class="hidden">
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="reg-name" required>
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-password" required minlength="6">
+      </div>
+      <div class="form-group">
+        <label>How did you find us?</label>
+        <select id="reg-channel">
+          <option value="direct">Direct</option>
+          <option value="organic">Organic Search</option>
+          <option value="paid_search">Paid Search</option>
+          <option value="social">Social Media</option>
+          <option value="email">Email</option>
+          <option value="referral">Referral</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Register</button>
+    </form>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/auth.js"></script>
+</body>
+</html>
