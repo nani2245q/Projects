@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import sqlite3
 import os
 import sys
+import math
 
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'warehouse.db')
 
@@ -183,7 +184,7 @@ st.markdown(f"""
 
 st.markdown(
     f"<span style='color:{t['subtext']}; font-size:0.85rem;'>"
-    "marketing attribution / conversion analysis / customer segmentation / lifetime value"
+    "marketing attribution / conversion analysis / customer segmentation / lifetime value / A/B testing"
     "</span>",
     unsafe_allow_html=True
 )
@@ -208,8 +209,8 @@ c5.metric("Sessions", f"{int(kpis['sessions']):,}")
 st.markdown("---")
 
 # ─── tabs ──────────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "Attribution", "Funnel", "Cohorts", "RFM", "LTV", "Revenue"
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "Attribution", "Funnel", "Cohorts", "RFM", "LTV", "Revenue", "A/B Tests"
 ])
 
 # ═══════════════════════════════════════════════════════════
@@ -636,3 +637,129 @@ with tab6:
     fig.update_xaxes(title='View to cart %', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
     fig.update_yaxes(title='Cart to purchase %', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
     st.plotly_chart(fig, use_container_width=True)
+
+
+# ═══════════════════════════════════════════════════════════
+# TAB 7 — A/B Test Results
+# ═══════════════════════════════════════════════════════════
+def compute_significance(n_c, conv_c, n_t, conv_t):
+    """Z-test for two proportions. Returns z-score, p-value, and lift."""
+    p_c = conv_c / n_c if n_c > 0 else 0
+    p_t = conv_t / n_t if n_t > 0 else 0
+    lift = ((p_t - p_c) / p_c * 100) if p_c > 0 else 0
+
+    # pooled proportion
+    p_pool = (conv_c + conv_t) / (n_c + n_t) if (n_c + n_t) > 0 else 0
+    se = math.sqrt(p_pool * (1 - p_pool) * (1/n_c + 1/n_t)) if (n_c > 0 and n_t > 0 and p_pool > 0 and p_pool < 1) else 0
+    z = (p_t - p_c) / se if se > 0 else 0
+
+    # two-tailed p-value approximation (no scipy needed)
+    # using the complementary error function
+    p_value = math.erfc(abs(z) / math.sqrt(2))
+
+    return z, p_value, lift
+
+
+with tab7:
+    ab = query("SELECT * FROM analytics_ab_test_results ORDER BY test_id, variant")
+
+    if ab.empty:
+        st.info("No A/B test data available. Run the ETL pipeline to generate test data.")
+    else:
+        # get unique tests
+        tests = ab[['test_id', 'test_name', 'description', 'metric', 'status']].drop_duplicates()
+
+        for _, test in tests.iterrows():
+            test_data = ab[ab['test_id'] == test['test_id']]
+            control = test_data[test_data['variant'] == 'control'].iloc[0] if len(test_data[test_data['variant'] == 'control']) > 0 else None
+            treatment = test_data[test_data['variant'] == 'treatment'].iloc[0] if len(test_data[test_data['variant'] == 'treatment']) > 0 else None
+
+            if control is None or treatment is None:
+                continue
+
+            # compute statistical significance
+            z, p_val, lift = compute_significance(
+                int(control['sample_size']), int(control['conversions']),
+                int(treatment['sample_size']), int(treatment['conversions'])
+            )
+            significant = p_val < 0.05
+
+            # header with status badge
+            status_color = COLORS[4] if test['status'] == 'completed' else COLORS[1]
+            st.markdown(
+                f"**{test['test_name']}** "
+                f"<span style='background:{status_color}; color:white; padding:2px 8px; "
+                f"border-radius:3px; font-size:0.75rem;'>{test['status']}</span>",
+                unsafe_allow_html=True
+            )
+            st.markdown(f"<span style='color:{t['subtext']}; font-size:0.85rem;'>{test['description']}</span>",
+                        unsafe_allow_html=True)
+
+            # metrics row
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Control conv. rate", f"{control['conversion_rate']}%")
+            m2.metric("Treatment conv. rate", f"{treatment['conversion_rate']}%")
+            m3.metric("Lift", f"{lift:+.1f}%")
+            sig_label = "Yes (p<0.05)" if significant else "No"
+            m4.metric("Significant", sig_label)
+
+            # side-by-side charts
+            left, right = st.columns(2)
+
+            with left:
+                bar_data = pd.DataFrame({
+                    'variant': ['Control', 'Treatment'],
+                    'conversion_rate': [control['conversion_rate'], treatment['conversion_rate']],
+                    'sample_size': [control['sample_size'], treatment['sample_size']]
+                })
+                fig = px.bar(
+                    bar_data, x='variant', y='conversion_rate',
+                    text='conversion_rate',
+                    color='variant',
+                    color_discrete_map={'Control': COLORS[0], 'Treatment': COLORS[4]},
+                    title='Conversion rate by variant (%)'
+                )
+                fig.update_traces(texttemplate='%{text}%', textposition='outside', marker_line_width=0)
+                clean_chart(fig, 300)
+                st.plotly_chart(fig, use_container_width=True)
+
+            with right:
+                bar_data2 = pd.DataFrame({
+                    'variant': ['Control', 'Treatment'],
+                    'avg_value': [control['avg_conversion_value'] or 0, treatment['avg_conversion_value'] or 0]
+                })
+                fig = px.bar(
+                    bar_data2, x='variant', y='avg_value',
+                    text='avg_value',
+                    color='variant',
+                    color_discrete_map={'Control': COLORS[0], 'Treatment': COLORS[4]},
+                    title='Avg conversion value ($)'
+                )
+                fig.update_traces(texttemplate='$%{text:.2f}', textposition='outside', marker_line_width=0)
+                clean_chart(fig, 300)
+                st.plotly_chart(fig, use_container_width=True)
+
+            # detail table
+            detail = test_data[['variant', 'sample_size', 'conversions', 'conversion_rate',
+                                'avg_conversion_value', 'total_value']].rename(columns={
+                'sample_size': 'n', 'conversion_rate': 'conv %',
+                'avg_conversion_value': 'avg value', 'total_value': 'total value'
+            })
+            st.dataframe(detail, use_container_width=True, hide_index=True)
+
+            # interpretation
+            if significant:
+                winner = "treatment" if lift > 0 else "control"
+                st.markdown(
+                    f"**Result:** Statistically significant (z={z:.2f}, p={p_val:.4f}). "
+                    f"The **{winner}** variant performed better with a {abs(lift):.1f}% lift in conversion rate. "
+                    f"Recommend rolling out the {winner} to all users."
+                )
+            else:
+                st.markdown(
+                    f"**Result:** Not statistically significant (z={z:.2f}, p={p_val:.4f}). "
+                    f"The {abs(lift):.1f}% observed difference could be due to chance. "
+                    f"Consider extending the test or increasing sample size."
+                )
+
+            st.markdown("---")

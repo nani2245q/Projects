@@ -133,6 +133,28 @@ def create_tables(conn):
         FOREIGN KEY (customer_id) REFERENCES raw_customers(customer_id)
     )''')
 
+    c.execute('''CREATE TABLE IF NOT EXISTS raw_ab_tests (
+        test_id INTEGER PRIMARY KEY,
+        test_name TEXT NOT NULL,
+        description TEXT,
+        metric TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        status TEXT
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS raw_ab_assignments (
+        assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_id INTEGER,
+        customer_id INTEGER,
+        variant TEXT,
+        assigned_at TEXT,
+        converted INTEGER DEFAULT 0,
+        conversion_value REAL DEFAULT 0.0,
+        FOREIGN KEY (test_id) REFERENCES raw_ab_tests(test_id),
+        FOREIGN KEY (customer_id) REFERENCES raw_customers(customer_id)
+    )''')
+
     conn.commit()
 
 
@@ -288,10 +310,93 @@ def generate_data(conn, num_customers=200):
 
     conn.commit()
 
+    # --- A/B Tests ---
+    # define a few realistic experiments
+    ab_tests = [
+        (1, 'Checkout Flow Redesign', 'Simplified single-page checkout vs multi-step',
+         'conversion_rate', (now - timedelta(days=90)).date().isoformat(),
+         (now - timedelta(days=30)).date().isoformat(), 'completed'),
+        (2, 'Homepage Hero Banner', 'Product carousel vs lifestyle image hero',
+         'conversion_rate', (now - timedelta(days=60)).date().isoformat(),
+         (now - timedelta(days=15)).date().isoformat(), 'completed'),
+        (3, 'Free Shipping Threshold', '$50 free shipping vs $35 free shipping threshold',
+         'avg_order_value', (now - timedelta(days=45)).date().isoformat(),
+         (now - timedelta(days=5)).date().isoformat(), 'completed'),
+        (4, 'Product Page Layout', 'Larger images with sticky add-to-cart vs standard layout',
+         'conversion_rate', (now - timedelta(days=20)).date().isoformat(),
+         None, 'running'),
+    ]
+
+    c.executemany(
+        'INSERT INTO raw_ab_tests VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ab_tests
+    )
+
+    # assign customers to tests and simulate outcomes
+    ab_assignments = []
+    # build a lookup of which customers placed orders (for realistic conversion)
+    ordering_customers = set()
+    for order in all_orders:
+        ordering_customers.add(order[1])  # customer_id is index 1
+
+    for test_id, name, desc, metric, start, end, status in ab_tests:
+        test_start = datetime.fromisoformat(start)
+        test_end = datetime.fromisoformat(end) if end else now
+
+        # pick a random subset of customers for this test (60-80%)
+        pool_size = int(num_customers * (0.6 + random.random() * 0.2))
+        pool = random.sample(range(1, num_customers + 1), pool_size)
+
+        # treatment effect — how much better the variant converts
+        if test_id == 1:
+            base_rate, lift = 0.12, 0.035   # checkout redesign: 12% -> ~15.5%
+        elif test_id == 2:
+            base_rate, lift = 0.08, 0.012   # hero banner: smaller effect
+        elif test_id == 3:
+            base_rate, lift = 0.15, 0.045   # free shipping: strong effect on AOV proxy
+        else:
+            base_rate, lift = 0.10, 0.018   # product page: moderate
+
+        for cid in pool:
+            variant = 'control' if random.random() < 0.5 else 'treatment'
+            assigned_at = test_start + timedelta(
+                seconds=random.random() * (test_end - test_start).total_seconds()
+            )
+
+            # conversion probability depends on variant
+            conv_rate = base_rate if variant == 'control' else base_rate + lift
+            converted = 1 if random.random() < conv_rate else 0
+
+            # conversion value (order total if converted)
+            if converted:
+                if metric == 'avg_order_value':
+                    # treatment gets slightly higher AOV
+                    base_val = 60 + random.random() * 80
+                    value = base_val * (1.12 if variant == 'treatment' else 1.0)
+                else:
+                    value = 40 + random.random() * 120
+            else:
+                value = 0.0
+
+            ab_assignments.append((
+                test_id, cid, variant,
+                assigned_at.isoformat(),
+                converted, round(value, 2)
+            ))
+
+    c.executemany(
+        'INSERT INTO raw_ab_assignments (test_id, customer_id, variant, assigned_at, converted, conversion_value) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        ab_assignments
+    )
+
+    conn.commit()
+
     print(f"Loaded {num_customers} customers")
     print(f"Loaded {len(PRODUCTS)} products")
     print(f"Loaded {len(all_events)} behavior events")
     print(f"Loaded {len(all_orders)} orders with {len(all_items)} line items")
+    print(f"Loaded {len(ab_tests)} A/B tests with {len(ab_assignments)} assignments")
 
 
 def main():
