@@ -109,21 +109,74 @@ with header_right:
 t = get_theme()
 COLORS = get_colors()
 
-# dynamic css based on theme
+# dynamic css based on theme — override streamlit's own theme completely
 st.markdown(f"""
 <style>
+    /* page background */
+    .stApp, [data-testid="stAppViewContainer"] {{
+        background-color: {t['bg']};
+        color: {t['text']};
+    }}
+    .stApp > header {{
+        background-color: {t['bg']};
+    }}
+    [data-testid="stSidebar"] {{
+        background-color: {t['card_bg']};
+    }}
+
+    /* text colors */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p,
+    .stApp label, .stApp span, .stMarkdown {{
+        color: {t['text']} !important;
+    }}
+
+    /* metric cards */
     [data-testid="stMetric"] {{
         background: {t['card_bg']};
         border: 1px solid {t['card_border']};
         border-radius: 6px;
         padding: 12px 16px;
     }}
-    [data-testid="stMetricLabel"] {{ font-size: 0.75rem; }}
-    [data-testid="stMetricValue"] {{ font-size: 1.4rem; }}
+    [data-testid="stMetricLabel"] {{
+        font-size: 0.75rem;
+        color: {t['subtext']} !important;
+    }}
+    [data-testid="stMetricLabel"] label, [data-testid="stMetricLabel"] p,
+    [data-testid="stMetricLabel"] span {{
+        color: {t['subtext']} !important;
+    }}
+    [data-testid="stMetricValue"] {{
+        font-size: 1.4rem;
+        color: {t['text']} !important;
+    }}
+    [data-testid="stMetricValue"] div {{
+        color: {t['text']} !important;
+    }}
+
+    /* tabs */
     .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
     .stTabs [data-baseweb="tab"] {{
         padding: 8px 16px;
         font-size: 0.85rem;
+        color: {t['subtext']} !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: {t['text']} !important;
+    }}
+
+    /* dataframe */
+    [data-testid="stDataFrame"] {{
+        background-color: {t['bg']};
+    }}
+
+    /* divider */
+    hr {{
+        border-color: {t['card_border']};
+    }}
+
+    /* toggle label */
+    [data-testid="stToggle"] label span {{
+        color: {t['text']} !important;
     }}
 </style>
 """, unsafe_allow_html=True)
