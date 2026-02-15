@@ -75,7 +75,7 @@ public class DataSeeder {
             System.out.println("Seeded " + savedExercises.size() + " exercises");
 
             // generate some fake workouts for both users
-            for (User user : List.of(user1, user2)) {
+            for (User user : List.of(admin, user1, user2)) {
                 for (int w = 0; w < 8; w++) {
                     Workout workout = new Workout();
                     workout.setUser(user);
@@ -123,7 +123,7 @@ public class DataSeeder {
                 }
             }
 
-            System.out.println("Seeded workouts and activity logs for 2 users");
+            System.out.println("Seeded workouts and activity logs for 3 users");
             System.out.println("FitZone database seeding complete!");
         };
     }
