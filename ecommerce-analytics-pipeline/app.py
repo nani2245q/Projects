@@ -21,8 +21,46 @@ if not os.path.exists(DB_PATH):
     run_etl()
     run_models()
 
-# muted color palette — not the default rainbow
-COLORS = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948']
+# ─── theme config ──────────────────────────────────────────
+THEMES = {
+    'light': {
+        'bg': 'white',
+        'card_bg': '#f8f9fa',
+        'card_border': '#e9ecef',
+        'grid': '#f0f0f0',
+        'text': '#1e293b',
+        'subtext': '#888',
+        'font_color': '#1e293b',
+        'colorscale_seq': 'Blues',
+        'colorscale_div': 'RdYlGn',
+        'colorscale_heat': 'OrRd',
+        'colorscale_tree': 'Greens',
+    },
+    'dark': {
+        'bg': '#0e1117',
+        'card_bg': '#1a1d23',
+        'card_border': '#2d3139',
+        'grid': '#1f2937',
+        'text': '#e2e8f0',
+        'subtext': '#94a3b8',
+        'font_color': '#e2e8f0',
+        'colorscale_seq': 'Blues',
+        'colorscale_div': 'RdYlGn',
+        'colorscale_heat': 'OrRd',
+        'colorscale_tree': 'Greens',
+    },
+}
+
+COLORS_LIGHT = ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2', '#59a14f', '#edc948']
+COLORS_DARK = ['#6a9fd8', '#f5a854', '#f07b7d', '#8fd4cf', '#7cc76e', '#f2dc6b']
+
+
+def get_theme():
+    return THEMES[st.session_state.get('theme_mode', 'light')]
+
+
+def get_colors():
+    return COLORS_DARK if st.session_state.get('theme_mode', 'light') == 'dark' else COLORS_LIGHT
 
 
 @st.cache_data(ttl=600)
@@ -35,46 +73,63 @@ def query(sql):
 
 def clean_chart(fig, height=360):
     """strip down plotly chrome so charts look less default"""
+    t = get_theme()
     fig.update_layout(
         height=height,
         margin=dict(l=0, r=10, t=35, b=0),
         title_font_size=14,
+        title_font_color=t['text'],
         font_size=12,
-        plot_bgcolor='white',
-        paper_bgcolor='white',
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'],
+        paper_bgcolor=t['bg'],
         showlegend=False,
         coloraxis_showscale=False
     )
-    fig.update_xaxes(showgrid=True, gridcolor='#f0f0f0')
-    fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0')
+    fig.update_xaxes(showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
+    fig.update_yaxes(showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
     return fig
 
 
 # ─── page setup ────────────────────────────────────────────
 st.set_page_config(page_title="Commerce Analytics", layout="wide")
 
-# custom css to tone down the streamlit defaults
-st.markdown("""
+# initialize theme state
+if 'theme_mode' not in st.session_state:
+    st.session_state['theme_mode'] = 'light'
+
+# theme toggle in header row
+header_left, header_right = st.columns([8, 1])
+with header_left:
+    st.markdown("### Commerce Analytics")
+with header_right:
+    is_dark = st.toggle("Dark", value=st.session_state['theme_mode'] == 'dark', key='_dark_toggle')
+    st.session_state['theme_mode'] = 'dark' if is_dark else 'light'
+
+t = get_theme()
+COLORS = get_colors()
+
+# dynamic css based on theme
+st.markdown(f"""
 <style>
-    [data-testid="stMetric"] {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
+    [data-testid="stMetric"] {{
+        background: {t['card_bg']};
+        border: 1px solid {t['card_border']};
         border-radius: 6px;
         padding: 12px 16px;
-    }
-    [data-testid="stMetricLabel"] { font-size: 0.75rem; }
-    [data-testid="stMetricValue"] { font-size: 1.4rem; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
+    }}
+    [data-testid="stMetricLabel"] {{ font-size: 0.75rem; }}
+    [data-testid="stMetricValue"] {{ font-size: 1.4rem; }}
+    .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
+    .stTabs [data-baseweb="tab"] {{
         padding: 8px 16px;
         font-size: 0.85rem;
-    }
+    }}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("### Commerce Analytics")
 st.markdown(
-    "<span style='color:#888; font-size:0.85rem;'>"
+    f"<span style='color:{t['subtext']}; font-size:0.85rem;'>"
     "marketing attribution / conversion analysis / customer segmentation / lifetime value"
     "</span>",
     unsafe_allow_html=True
@@ -141,8 +196,10 @@ with tab1:
         )
         fig.update_layout(
             height=320, margin=dict(l=0, r=0, t=35, b=0),
-            title_font_size=14, showlegend=True,
-            legend=dict(font_size=11)
+            title_font_size=14, title_font_color=t['text'],
+            font_color=t['font_color'],
+            plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+            showlegend=True, legend=dict(font_size=11, font_color=t['font_color'])
         )
         fig.update_traces(textposition='inside', textinfo='percent')
         st.plotly_chart(fig, use_container_width=True)
@@ -190,16 +247,21 @@ with tab2:
     stage_labels = ['Page View', 'Product View', 'Add to Cart', 'Checkout Start', 'Purchase']
     funnel['label'] = stage_labels
 
+    funnel_colors_light = [COLORS[0], '#6a9ecf', '#8bb8d9', '#aed2e6', '#d0e8f2']
+    funnel_colors_dark = [COLORS[0], '#5585b5', '#426f99', '#2f5a80', '#1e4568']
+    f_colors = funnel_colors_dark if st.session_state['theme_mode'] == 'dark' else funnel_colors_light
+
     fig = go.Figure(go.Funnel(
         y=funnel['label'],
         x=funnel['unique_users'],
         textinfo="value+percent initial",
-        marker=dict(color=[COLORS[0], '#6a9ecf', '#8bb8d9', '#aed2e6', '#d0e8f2']),
-        connector=dict(line=dict(color='#e0e0e0'))
+        marker=dict(color=f_colors),
+        connector=dict(line=dict(color=t['grid']))
     ))
     fig.update_layout(
         height=380, margin=dict(l=0, r=0, t=10, b=0),
-        plot_bgcolor='white', paper_bgcolor='white'
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        font_color=t['font_color']
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -246,13 +308,16 @@ with tab3:
 
     fig = px.imshow(
         pivot_ret, text_auto='.0f', aspect='auto',
-        color_continuous_scale='Blues',
+        color_continuous_scale=t['colorscale_seq'],
         labels=dict(x='Months after signup', y='Signup cohort', color='Retention %'),
         title='Retention rate by cohort (%)'
     )
     fig.update_layout(
         height=450, margin=dict(l=0, r=0, t=35, b=0),
-        title_font_size=14, coloraxis_showscale=True
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        coloraxis_showscale=True
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -265,13 +330,16 @@ with tab3:
 
     fig2 = px.imshow(
         pivot_rev, text_auto=',.0f', aspect='auto',
-        color_continuous_scale='OrRd',
+        color_continuous_scale=t['colorscale_heat'],
         labels=dict(x='Months after signup', y='Signup cohort', color='Revenue $'),
         title='Revenue by cohort ($)'
     )
     fig2.update_layout(
         height=450, margin=dict(l=0, r=0, t=35, b=0),
-        title_font_size=14, coloraxis_showscale=True
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        coloraxis_showscale=True
     )
     st.plotly_chart(fig2, use_container_width=True)
 
@@ -328,11 +396,13 @@ with tab4:
     )
     fig.update_layout(
         height=480, margin=dict(l=0, r=0, t=35, b=0),
-        title_font_size=14, plot_bgcolor='white',
-        legend=dict(font_size=10, orientation='h', y=-0.15)
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        legend=dict(font_size=10, font_color=t['font_color'], orientation='h', y=-0.15)
     )
-    fig.update_xaxes(title='Days since last order', showgrid=True, gridcolor='#f0f0f0')
-    fig.update_yaxes(title='Lifetime spend ($)', showgrid=True, gridcolor='#f0f0f0')
+    fig.update_xaxes(title='Days since last order', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
+    fig.update_yaxes(title='Lifetime spend ($)', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
     st.plotly_chart(fig, use_container_width=True)
 
     champs = rfm_agg[rfm_agg['rfm_segment'] == 'Champions']
@@ -395,10 +465,15 @@ with tab5:
     fig = px.treemap(
         ltv_detail, path=['channel', 'customer_segment'],
         values='num_customers', color='avg_ltv',
-        color_continuous_scale='Greens',
+        color_continuous_scale=t['colorscale_tree'],
         title='Segment breakdown by channel (color = LTV)'
     )
-    fig.update_layout(height=420, margin=dict(l=0, r=0, t=35, b=0), title_font_size=14)
+    fig.update_layout(
+        height=420, margin=dict(l=0, r=0, t=35, b=0),
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        paper_bgcolor=t['bg']
+    )
     st.plotly_chart(fig, use_container_width=True)
 
     best_ch = ltv.iloc[0]
@@ -427,11 +502,13 @@ with tab6:
     fig.update_layout(
         barmode='stack', title='Monthly revenue — new vs returning',
         height=380, margin=dict(l=0, r=0, t=35, b=0),
-        title_font_size=14, plot_bgcolor='white',
-        legend=dict(font_size=11, orientation='h', y=1.05)
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        legend=dict(font_size=11, font_color=t['font_color'], orientation='h', y=1.05)
     )
-    fig.update_xaxes(showgrid=False)
-    fig.update_yaxes(showgrid=True, gridcolor='#f0f0f0', title='Revenue ($)')
+    fig.update_xaxes(showgrid=False, tickfont_color=t['font_color'])
+    fig.update_yaxes(showgrid=True, gridcolor=t['grid'], title='Revenue ($)', tickfont_color=t['font_color'])
     st.plotly_chart(fig, use_container_width=True)
 
     left, right = st.columns(2)
@@ -448,12 +525,15 @@ with tab6:
         cd = query("SELECT * FROM analytics_channel_device")
         pivot_cd = cd.pivot_table(index='channel', columns='device_type', values='conversion_rate')
         fig = px.imshow(
-            pivot_cd, text_auto='.1f', color_continuous_scale='RdYlGn',
+            pivot_cd, text_auto='.1f', color_continuous_scale=t['colorscale_div'],
             title='Conversion: channel x device'
         )
         fig.update_layout(
             height=320, margin=dict(l=0, r=0, t=35, b=0),
-            title_font_size=14, coloraxis_showscale=True
+            title_font_size=14, title_font_color=t['text'],
+            font_color=t['font_color'],
+            plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+            coloraxis_showscale=True
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -472,12 +552,14 @@ with tab6:
     )
     fig.update_layout(
         height=380, margin=dict(l=0, r=10, t=35, b=0),
-        title_font_size=14, plot_bgcolor='white',
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
         yaxis={'categoryorder': 'total ascending'},
-        legend=dict(font_size=10, orientation='h', y=-0.15)
+        legend=dict(font_size=10, font_color=t['font_color'], orientation='h', y=-0.15)
     )
-    fig.update_xaxes(showgrid=True, gridcolor='#f0f0f0', title='Revenue ($)')
-    fig.update_yaxes(showgrid=False)
+    fig.update_xaxes(showgrid=True, gridcolor=t['grid'], title='Revenue ($)', tickfont_color=t['font_color'])
+    fig.update_yaxes(showgrid=False, tickfont_color=t['font_color'])
     st.plotly_chart(fig, use_container_width=True)
 
     # conversion scatter
@@ -493,9 +575,11 @@ with tab6:
     )
     fig.update_layout(
         height=420, margin=dict(l=0, r=0, t=35, b=0),
-        title_font_size=14, plot_bgcolor='white',
-        legend=dict(font_size=10, orientation='h', y=-0.12)
+        title_font_size=14, title_font_color=t['text'],
+        font_color=t['font_color'],
+        plot_bgcolor=t['bg'], paper_bgcolor=t['bg'],
+        legend=dict(font_size=10, font_color=t['font_color'], orientation='h', y=-0.12)
     )
-    fig.update_xaxes(title='View to cart %', showgrid=True, gridcolor='#f0f0f0')
-    fig.update_yaxes(title='Cart to purchase %', showgrid=True, gridcolor='#f0f0f0')
+    fig.update_xaxes(title='View to cart %', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
+    fig.update_yaxes(title='Cart to purchase %', showgrid=True, gridcolor=t['grid'], tickfont_color=t['font_color'])
     st.plotly_chart(fig, use_container_width=True)
