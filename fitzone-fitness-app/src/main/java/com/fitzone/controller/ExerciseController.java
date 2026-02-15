@@ -48,4 +48,33 @@ public class ExerciseController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    // admin-only: create a new exercise
+    @PostMapping
+    public ResponseEntity<Exercise> create(@RequestBody Exercise exercise) {
+        exercise.setId(null);
+        return ResponseEntity.ok(exerciseRepo.save(exercise));
+    }
+
+    // admin-only: update an existing exercise
+    @PutMapping("/{id}")
+    public ResponseEntity<Exercise> update(@PathVariable Long id, @RequestBody Exercise exercise) {
+        return exerciseRepo.findById(id).map(existing -> {
+            existing.setName(exercise.getName());
+            existing.setDescription(exercise.getDescription());
+            existing.setMuscleGroup(exercise.getMuscleGroup());
+            existing.setCategory(exercise.getCategory());
+            existing.setCaloriesPerMinute(exercise.getCaloriesPerMinute());
+            existing.setDifficulty(exercise.getDifficulty());
+            return ResponseEntity.ok(exerciseRepo.save(existing));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // admin-only: delete an exercise
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        if (!exerciseRepo.existsById(id)) return ResponseEntity.notFound().build();
+        exerciseRepo.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

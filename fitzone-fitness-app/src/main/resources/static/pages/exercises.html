@@ -5,6 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FitZone - Exercise Library</title>
     <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .admin-bar { background:#f0f4ff; border:1px solid #c7d7fe; border-radius:8px; padding:1rem; margin-bottom:1.5rem; display:none; }
+        .admin-bar h3 { margin:0 0 .5rem; color:#3b5998; font-size:.95rem; }
+        .admin-bar .role-badge { background:#3b5998; color:#fff; font-size:.7rem; padding:2px 8px; border-radius:4px; vertical-align:middle; }
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; }
+        .form-grid input, .form-grid select { padding:.45rem .6rem; border:1px solid var(--border); border-radius:6px; font-size:.85rem; }
+        .form-grid .full { grid-column:1/-1; }
+        .btn-admin { background:#3b5998; color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; cursor:pointer; font-size:.85rem; margin-top:.5rem; }
+        .btn-admin:hover { background:#2d4373; }
+        .btn-admin.danger { background:#dc3545; }
+        .btn-admin.danger:hover { background:#bd2130; }
+        .exercise-card .admin-actions { margin-top:.6rem; display:flex; gap:.4rem; }
+        .exercise-card .admin-actions button { font-size:.75rem; padding:.25rem .6rem; border:none; border-radius:4px; cursor:pointer; }
+        .exercise-card .admin-actions .btn-edit { background:#e9ecef; color:#333; }
+        .exercise-card .admin-actions .btn-edit:hover { background:#dee2e6; }
+        .exercise-card .admin-actions .btn-delete { background:#f8d7da; color:#842029; }
+        .exercise-card .admin-actions .btn-delete:hover { background:#f1aeb5; }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -21,6 +39,44 @@
 
     <main class="container">
         <h1>Exercise Library</h1>
+
+        <!-- admin-only: exercise management panel -->
+        <div id="admin-bar" class="admin-bar">
+            <h3><span class="role-badge">ADMIN</span> Manage Exercises</h3>
+            <div class="form-grid">
+                <input type="hidden" id="edit-id">
+                <input type="text" id="ex-name" placeholder="Exercise name" required>
+                <input type="text" id="ex-desc" placeholder="Description" class="full">
+                <select id="ex-muscle">
+                    <option value="CHEST">Chest</option>
+                    <option value="BACK">Back</option>
+                    <option value="SHOULDERS">Shoulders</option>
+                    <option value="ARMS">Arms</option>
+                    <option value="LEGS">Legs</option>
+                    <option value="CORE">Core</option>
+                    <option value="FULL_BODY">Full Body</option>
+                    <option value="CARDIO">Cardio</option>
+                </select>
+                <select id="ex-category">
+                    <option value="STRENGTH">Strength</option>
+                    <option value="CARDIO">Cardio</option>
+                    <option value="FLEXIBILITY">Flexibility</option>
+                    <option value="HIIT">HIIT</option>
+                    <option value="BALANCE">Balance</option>
+                </select>
+                <select id="ex-difficulty">
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                </select>
+                <input type="number" id="ex-cal" placeholder="Cal/min" step="0.1" min="0">
+            </div>
+            <div style="display:flex;gap:.5rem;margin-top:.6rem">
+                <button class="btn-admin" id="save-btn" onclick="saveExercise()">Add Exercise</button>
+                <button class="btn-admin danger" id="cancel-edit-btn" onclick="cancelEdit()" style="display:none">Cancel</button>
+            </div>
+        </div>
+
         <div style="display:flex;gap:1rem;margin:1rem 0;flex-wrap:wrap">
             <select id="filter-muscle" onchange="loadExercises()">
                 <option value="">All Muscle Groups</option>
@@ -49,6 +105,13 @@
 
     <script src="/js/config.js"></script>
     <script>
+        const user = getUser();
+        const isAdmin = user && user.role === 'ADMIN';
+
+        if (isAdmin) {
+            document.getElementById('admin-bar').style.display = 'block';
+        }
+
         async function loadExercises() {
             const muscle = document.getElementById('filter-muscle').value;
             const category = document.getElementById('filter-category').value;
@@ -66,6 +129,7 @@
             (Array.isArray(exercises) ? exercises : []).forEach(ex => {
                 const card = document.createElement('div');
                 card.className = 'exercise-card';
+                const safeEx = JSON.stringify(ex).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
                 card.innerHTML = `
                     <h3>${ex.name}</h3>
                     <p class="meta">${ex.description || ''}</p>
@@ -75,13 +139,80 @@
                         ${ex.difficulty ? `<span class="badge">${ex.difficulty}</span>` : ''}
                     </div>
                     <p class="meta" style="margin-top:.4rem">${ex.caloriesPerMinute ? ex.caloriesPerMinute + ' cal/min' : ''}</p>
+                    ${isAdmin ? `
+                    <div class="admin-actions">
+                        <button class="btn-edit" data-ex="${safeEx}">Edit</button>
+                        <button class="btn-delete" data-id="${ex.id}">Delete</button>
+                    </div>` : ''}
                 `;
                 container.appendChild(card);
             });
 
+            // attach admin button handlers via delegation
+            if (isAdmin) {
+                container.querySelectorAll('.btn-edit').forEach(btn => {
+                    btn.addEventListener('click', () => editExercise(JSON.parse(btn.dataset.ex)));
+                });
+                container.querySelectorAll('.btn-delete').forEach(btn => {
+                    btn.addEventListener('click', () => deleteExercise(btn.dataset.id));
+                });
+            }
+
             if (container.children.length === 0) {
                 container.innerHTML = '<p style="color:var(--text-light)">No exercises found.</p>';
             }
+        }
+
+        async function saveExercise() {
+            const id = document.getElementById('edit-id').value;
+            const body = {
+                name: document.getElementById('ex-name').value.trim(),
+                description: document.getElementById('ex-desc').value.trim(),
+                muscleGroup: document.getElementById('ex-muscle').value,
+                category: document.getElementById('ex-category').value,
+                difficulty: document.getElementById('ex-difficulty').value,
+                caloriesPerMinute: parseFloat(document.getElementById('ex-cal').value) || 0
+            };
+
+            if (!body.name) { alert('Exercise name is required'); return; }
+
+            const url = id ? `/api/exercises/${id}` : '/api/exercises';
+            const method = id ? 'PUT' : 'POST';
+
+            const result = await apiFetch(url, { method, body: JSON.stringify(body) });
+            if (result && result.id) {
+                cancelEdit();
+                loadExercises();
+            }
+        }
+
+        function editExercise(ex) {
+            document.getElementById('edit-id').value = ex.id;
+            document.getElementById('ex-name').value = ex.name || '';
+            document.getElementById('ex-desc').value = ex.description || '';
+            document.getElementById('ex-muscle').value = ex.muscleGroup || 'CHEST';
+            document.getElementById('ex-category').value = ex.category || 'STRENGTH';
+            document.getElementById('ex-difficulty').value = ex.difficulty || 'Beginner';
+            document.getElementById('ex-cal').value = ex.caloriesPerMinute || '';
+
+            document.getElementById('save-btn').textContent = 'Save Changes';
+            document.getElementById('cancel-edit-btn').style.display = 'inline-block';
+            document.getElementById('admin-bar').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            document.getElementById('edit-id').value = '';
+            document.getElementById('ex-name').value = '';
+            document.getElementById('ex-desc').value = '';
+            document.getElementById('ex-cal').value = '';
+            document.getElementById('save-btn').textContent = 'Add Exercise';
+            document.getElementById('cancel-edit-btn').style.display = 'none';
+        }
+
+        async function deleteExercise(id) {
+            if (!confirm('Delete this exercise?')) return;
+            await apiFetch(`/api/exercises/${id}`, { method: 'DELETE' });
+            loadExercises();
         }
 
         document.addEventListener('DOMContentLoaded', loadExercises);
