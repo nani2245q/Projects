@@ -30,7 +30,7 @@ THEMES = {
         'card_border': '#e9ecef',
         'grid': '#f0f0f0',
         'text': '#1e293b',
-        'subtext': '#888',
+        'subtext': '#64748b',
         'font_color': '#1e293b',
         'colorscale_seq': 'Blues',
         'colorscale_div': 'RdYlGn',
@@ -160,9 +160,11 @@ st.markdown(f"""
         padding: 8px 16px;
         font-size: 0.85rem;
         color: {t['subtext']} !important;
+        font-weight: 500;
     }}
     .stTabs [aria-selected="true"] {{
         color: {t['text']} !important;
+        font-weight: 600;
     }}
 
     /* dataframe */
@@ -178,6 +180,10 @@ st.markdown(f"""
     /* toggle label */
     [data-testid="stToggle"] label span {{
         color: {t['text']} !important;
+        font-weight: 500;
+    }}
+    [data-testid="stToggle"] {{
+        opacity: 1 !important;
     }}
 </style>
 """, unsafe_allow_html=True)
